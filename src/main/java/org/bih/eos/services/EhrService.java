@@ -27,7 +27,6 @@ public class EhrService {
     private final EHRToPersonService ehrToPersonService;
     private final OpenEhrClient openEhrClient;
     private final ConverterService converterService;
-    private ConversionResponse output;
 
     public EhrService(EHRToPersonService ehrToPersonService, OpenEhrClient openEhrClient, ConverterService converterService) {
         this.ehrToPersonService = ehrToPersonService;
@@ -36,43 +35,43 @@ public class EhrService {
     }
 
     public String convertAll() {
-        output = new ConversionResponse();
+        ConversionResponse output = new ConversionResponse();
         List<EHRToPerson> ehrToPersonList = ehrToPersonService.findAll();
         for (EHRToPerson ehrToPerson : ehrToPersonList) {
-            convertEhrContent(ehrToPerson);
+            convertEhrContent(ehrToPerson, output);
         }
         return output.getJson();
     }
 
     public String convertEhrList(Ehrs ehrList) {
-        output = new ConversionResponse();
+        ConversionResponse output = new ConversionResponse();
         for (String ehrId : ehrList.getEhrIds()) {
             Optional<EHRToPerson> ehrToPersonOptional = ehrToPersonService.findByEhrId(ehrId);
-            ehrToPersonOptional.ifPresent(this::convertEhrContent);
+            ehrToPersonOptional.ifPresent(ehrToPerson -> convertEhrContent(ehrToPerson, output));
         }
         return output.getJson();
     }
 
-    private void convertEhrContent(EHRToPerson ehrToPerson) {
-        loadCompositions(ehrToPerson);
+    private void convertEhrContent(EHRToPerson ehrToPerson, ConversionResponse output) {
+        loadCompositions(ehrToPerson,output );
     }
-    public void loadCompositions(EHRToPerson ehrToPerson) {
+    public void loadCompositions(EHRToPerson ehrToPerson, ConversionResponse output) {
         List<Record1<Composition>> result = executeAqlQuery(0, ehrToPerson.getEhrId());
-        convert(result, ehrToPerson);
-        batchLoad(result, ehrToPerson, 0);
+        convert(result, ehrToPerson, output);
+        batchLoad(result, ehrToPerson, 0, output);
         converterService.convertLastBatch();
     }
 
-    private void batchLoad(List<Record1<Composition>> result, EHRToPerson ehrToPerson, long offset) {
+    private void batchLoad(List<Record1<Composition>> result, EHRToPerson ehrToPerson, long offset, ConversionResponse output) {
         if (result.size() == offsetLimit) {
             offset += offsetLimit;
             List<Record1<Composition>> resultNew = executeAqlQuery(offset, ehrToPerson.getEhrId());
-            convert(resultNew, ehrToPerson);
-            batchLoad(resultNew, ehrToPerson, offset);
+            convert(resultNew, ehrToPerson, output);
+            batchLoad(resultNew, ehrToPerson, offset, output);
         }
     }
 
-    public void convert(List<Record1<Composition>> resultNew, EHRToPerson ehrToPerson) {
+    public void convert(List<Record1<Composition>> resultNew, EHRToPerson ehrToPerson, ConversionResponse output) {
         for (Record1<Composition> compositionRecord1 : resultNew) {
             if (compositionRecord1.value1() != null) {
               //  List<JPABaseEntity> converterResult = converterService.convert(new ConvertableComposition(compositionRecord1.value1(), ehrToPerson.getPerson()));
@@ -95,6 +94,4 @@ public class EhrService {
             return new ArrayList<>();
         }
     }
-
-    
 }
